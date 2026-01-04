@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react'
 import { Outlet } from 'react-router-dom'
-import { PanelLeft } from 'lucide-react'
+import { PanelLeft, Moon, Sun } from 'lucide-react'
 import Sidebar from './Sidebar'
 import { Button } from './ui/Button'
 import { cn } from '@/lib/utils'
+import { useTheme } from '@/contexts/ThemeContext'
 
 export default function ChatLayout() {
+  const { theme, toggleTheme } = useTheme()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
 
   // Check if desktop on mount
@@ -39,9 +41,17 @@ export default function ChatLayout() {
           >
             <PanelLeft className="h-5 w-5" />
           </Button>
-          <div className="w-2/3">
+          <div className="flex-1 text-center">
             <p className="text-sm text-muted-foreground">Chat with Gemini Flash 2.5</p>
           </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={toggleTheme}
+            title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
+          >
+            {theme === 'light' ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
+          </Button>
         </div>
         
         <Outlet />

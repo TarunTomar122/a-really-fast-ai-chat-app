@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Plus, Trash2, Search, PanelLeftClose } from 'lucide-react'
+import { Plus, Trash2, Search, PanelLeftClose, Moon, Sun } from 'lucide-react'
 import { Button } from './ui/Button'
 import { ScrollArea } from './ui/ScrollArea'
 import { Input } from './ui/Input'
 import { cn } from '@/lib/utils'
+import { useTheme } from '@/contexts/ThemeContext'
 
 export default function Sidebar({ isOpen, onToggle }) {
+  const { theme, toggleTheme } = useTheme()
   const navigate = useNavigate()
   const { threadId } = useParams()
   const [threads, setThreads] = useState([])
@@ -106,14 +108,25 @@ export default function Sidebar({ isOpen, onToggle }) {
         <div className="p-3 space-y-4">
           <div className="flex items-center justify-between">
             <a className="text-lg font-semibold px-2 cursor-pointer" href="/">Gemini</a>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={onToggle}
-              className="lg:hidden"
-            >
-              <PanelLeftClose className="h-4 w-4" />
-            </Button>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={toggleTheme}
+                className="hidden lg:flex"
+                title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
+              >
+                {theme === 'light' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onToggle}
+                className="lg:hidden"
+              >
+                <PanelLeftClose className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
 
           <div className="relative">
