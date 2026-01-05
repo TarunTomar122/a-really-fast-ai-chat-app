@@ -121,7 +121,7 @@ That's it! Open http://localhost:5173 and start chatting.
 
 ## potential improvements
 
-Some things that could be better:
+Some things that could be better:  
 
 **1. Handle reload/navigation during AI responses**
 
