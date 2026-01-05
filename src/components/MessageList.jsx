@@ -4,6 +4,10 @@ import { cn } from '@/lib/utils'
 import { ScrollArea } from './ui/ScrollArea'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { useChatStore } from '@/stores/useChatStore'
+
+// Stable empty array to avoid creating new references
+const EMPTY_MESSAGES = []
 
 // Memoized User Message Component - only re-renders if props change
 const UserMessage = memo(({ content }) => {
@@ -71,7 +75,17 @@ const AIMessage = memo(({ content, isError }) => {
 })
 AIMessage.displayName = 'AIMessage'
 
-function MessageList({ messages, isLoading, threadId }) {
+function MessageList() {
+
+  const isLoading = useChatStore((state) => state.isLoading)
+  const currentThreadId = useChatStore((state) => state.currentThreadId)
+  // Subscribe to messages for current thread, use stable empty array if none exist
+  const messages = useChatStore((state) => 
+    state.currentThreadId && state.messages[state.currentThreadId] 
+      ? state.messages[state.currentThreadId]
+      : EMPTY_MESSAGES
+  )
+
   const bottomRef = useRef(null)
   const scrollAreaRef = useRef(null)
   const [showScrollButton, setShowScrollButton] = useState(false)
@@ -86,7 +100,7 @@ function MessageList({ messages, isLoading, threadId }) {
       }
     }, 0)
     return () => clearTimeout(timer)
-  }, [threadId])
+  }, [currentThreadId])
 
   // Auto-scroll when a new message is added (user message or first AI chunk)
   // But don't auto-scroll during streaming (when just content updates)

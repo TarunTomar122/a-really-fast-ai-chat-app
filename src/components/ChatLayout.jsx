@@ -4,10 +4,11 @@ import { PanelLeft, Moon, Sun } from 'lucide-react'
 import Sidebar from './Sidebar'
 import { Button } from './ui/Button'
 import { cn } from '@/lib/utils'
-import { useTheme } from '@/contexts/ThemeContext'
+import { useThemeStore } from '@/stores/useThemeStore'
 
 export default function ChatLayout() {
-  const { theme, toggleTheme } = useTheme()
+  const theme = useThemeStore((state) => state.theme)
+  const toggleTheme = useThemeStore((state) => state.toggleTheme)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
 
   // Check if desktop on mount

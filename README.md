@@ -2,7 +2,7 @@
 
 ## context
 
-So I built this chat app in like... a few hours? The whole idea was to make something super minimal and **fast** for chatting with Gemini AI. No backend, no database drama, just pure frontend magic.
+The whole idea is to make something super minimal and **fast** for chatting with Gemini AI. No backend, no database drama, just pure frontend magic.
 
 The app streams responses character by character which makes it feel really snappy and fun to use. Plus I added some quality of life features like being able to stop the AI mid-response, copy messages, and all that jazz.
 
@@ -25,8 +25,6 @@ The app streams responses character by character which makes it feel really snap
 
 Built with React + Vite because that's the fastest way to get started. Used Tailwind for styling (obviously) and shadcn/ui components for the UI bits. Everything is stored in localStorage so no server needed. The app talks directly to Gemini's API using their SDK.
 
-Oh and I spent way too much time optimizing re-renders using React.memo and useCallback so the streaming is buttery smooth :)
-
 **Stack:**
 - React 18
 - Vite
@@ -34,7 +32,58 @@ Oh and I spent way too much time optimizing re-renders using React.memo and useC
 - shadcn/ui components
 - Google Gemini API (Flash 2.5)
 - React Router for navigation
-- localStorage for persistence
+- Zustand for state management
+- localStorage for persistence (via Zustand persist middleware)
+
+----
+
+## how the re-render optimization works
+
+So the main thing that makes this fast is how we handle state with Zustand. Basically we split thread metadata from the actual messages so components only re-render when they actually need to.
+
+### The store structure
+
+```javascript
+{
+  threads: [],      // just metadata: {id, title, createdAt, updatedAt}
+  messages: {},     // actual messages: { [threadId]: [messages] }
+  currentThreadId: null
+}
+```
+
+By keeping these separate, when messages stream in only the `messages` object changes. The `threads` array stays the same so the Sidebar doesn't re-render.
+
+### What each component subscribes to
+
+**Sidebar**
+```javascript
+const threads = useChatStore((state) => state.threads)
+```
+Only gets thread metadata. Doesn't care about messages at all so it stays static during streaming.
+
+**MessageList**
+```javascript
+const messages = useChatStore((state) => 
+  state.currentThreadId && state.messages[state.currentThreadId] 
+    ? state.messages[state.currentThreadId]
+    : EMPTY_MESSAGES
+)
+```
+Only subscribes to the current thread's messages. Uses a stable `EMPTY_MESSAGES` constant to avoid creating new array references.
+
+**ChatInput**
+```javascript
+const isStreaming = useChatStore((state) => state.isStreaming)
+```
+Only cares about streaming state, nothing else.
+
+### Other optimizations
+
+- Individual messages are wrapped in `React.memo` so they only update if their content changes
+- Functions selected from the store don't cause re-renders (they're stable references)
+- Thread timestamps only update when the conversation completes, not during streaming
+
+So basically when AI is streaming: MessageList updates to show new content, everything else stays static. That's it.
 
 ----
 
@@ -67,12 +116,6 @@ npm run dev
 ```
 
 That's it! Open http://localhost:5173 and start chatting.
-
-----
-
-## things i learned
-
-This was a fun project to build because I got to mess around with streaming APIs and optimize React rendering. The biggest challenge was making sure only the streaming message re-renders and not the entire chat history (which would be super laggy).
 
 ----
 

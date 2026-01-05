@@ -1,97 +1,48 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
-import { flushSync } from 'react-dom'
+import { useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import MessageList from './MessageList'
 import ChatInput from './ChatInput'
 import { streamMessageFromGemini } from '@/lib/gemini'
+import { useChatStore } from '@/stores/useChatStore'
 
 export default function ChatView() {
+  
   const { threadId } = useParams()
   const navigate = useNavigate()
-  const [messages, setMessages] = useState([])
-  const [isLoading, setIsLoading] = useState(false)
-  const [isStreaming, setIsStreaming] = useState(false)
-  const currentThreadIdRef = useRef(null)
-  const messagesRef = useRef(messages)
   const abortControllerRef = useRef(null)
-  
-  // Keep ref in sync with state
-  useEffect(() => {
-    messagesRef.current = messages
-  }, [messages])
 
+  // Get store actions
+  const createThread = useChatStore(state => state.createThread)
+  const addMessage = useChatStore(state => state.addMessage)
+  const updateLastMessage = useChatStore(state => state.updateLastMessage)
+  const updateThreadTimestamp = useChatStore(state => state.updateThreadTimestamp)
+  const setLoading = useChatStore(state => state.setLoading)
+  const setStreaming = useChatStore(state => state.setStreaming)
+  const loadThread = useChatStore(state => state.loadThread)
+  const clearCurrentThread = useChatStore(state => state.clearCurrentThread)
+  const getCurrentMessages = useChatStore(state => state.getCurrentMessages)
+
+  // Load thread when threadId changes
   useEffect(() => {
     if (threadId) {
       loadThread(threadId)
-      currentThreadIdRef.current = threadId
     } else {
-      setMessages([])
-      currentThreadIdRef.current = null
+      clearCurrentThread()
     }
-  }, [threadId])
-
-  const loadThread = (id) => {
-    const threads = JSON.parse(localStorage.getItem('chat-threads') || '[]')
-    const thread = threads.find(t => t.id === id)
-    if (thread) {
-      setMessages(thread.messages || [])
-    }
-  }
-
-  const saveThread = (newMessages) => {
-    const threads = JSON.parse(localStorage.getItem('chat-threads') || '[]')
-    
-    // Use ref to persist threadId across multiple saveThread calls
-    if (!currentThreadIdRef.current) {
-      currentThreadIdRef.current = threadId || Date.now().toString()
-    }
-    const currentThreadId = currentThreadIdRef.current
-    
-    const existingThreadIndex = threads.findIndex(t => t.id === currentThreadId)
-    const isNewThread = existingThreadIndex < 0
-    
-    const threadData = {
-      id: currentThreadId,
-      title: newMessages[0]?.content.substring(0, 50) || 'New Chat',
-      messages: newMessages,
-      updatedAt: Date.now()
-    }
-
-    if (existingThreadIndex >= 0) {
-      threads[existingThreadIndex] = threadData
-    } else {
-      threads.push(threadData)
-    }
-
-    // Sort threads by updatedAt (most recent first)
-    threads.sort((a, b) => b.updatedAt - a.updatedAt)
-
-    localStorage.setItem('chat-threads', JSON.stringify(threads))
-    
-    if (!threadId) {
-      navigate(`/chat/${currentThreadId}`, { replace: true })
-    }
-
-    // Only trigger sidebar refresh when creating a NEW thread
-    // Don't refresh on every message update (optimization!)
-    if (isNewThread) {
-      window.dispatchEvent(new Event('storage'))
-    }
-  }
+  }, [threadId, loadThread, clearCurrentThread])
 
   // Stop streaming handler
-  const handleStopStreaming = useCallback(() => {
+  const handleStopStreaming = () => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort()
       abortControllerRef.current = null
-      setIsLoading(false)
-      setIsStreaming(false)
+      setLoading(false)
+      setStreaming(false)
     }
-  }, [])
+  }
 
-  // useCallback ensures stable function reference
-  // Prevents ChatInput from re-rendering during streaming
-  const handleSendMessage = useCallback(async (content) => {
+  // Send message handler
+  const handleSendMessage = async (content) => {
     const userMessage = {
       id: Date.now().toString(),
       role: 'user',
@@ -99,17 +50,28 @@ export default function ChatView() {
       timestamp: Date.now()
     }
 
-    // Use ref to get current messages without depending on messages state
-    const newMessages = [...messagesRef.current, userMessage]
-    setMessages(newMessages)
-    setIsLoading(true)
-    setIsStreaming(true)
+    // If no thread exists, create one and navigate to it
+    let currentThreadId = threadId
+    const isNewThread = !currentThreadId
+    if (!currentThreadId) {
+      currentThreadId = createThread(content)
+      navigate(`/chat/${currentThreadId}`, { replace: true })
+    }
 
-    // Create abort controller for this request
+    // Add user message
+    addMessage(userMessage)
+    // Update thread timestamp immediately to reorder in sidebar (skip for new threads, already set)
+    if (!isNewThread) {
+      updateThreadTimestamp(currentThreadId)
+    }
+    setLoading(true)
+    setStreaming(true)
+
+    // Create abort controller
     abortControllerRef.current = new AbortController()
     const signal = abortControllerRef.current.signal
 
-    // Create a placeholder AI message that will be updated as chunks arrive
+    // Create AI message
     const aiMessageId = (Date.now() + 1).toString()
     const aiMessage = {
       id: aiMessageId,
@@ -118,47 +80,36 @@ export default function ChatView() {
       timestamp: Date.now()
     }
 
-    // Don't add the AI message yet - wait for first chunk
     try {
       let fullResponse = ''
       let isFirstChunk = true
-      
-      // Pass the entire conversation history to maintain context
-      for await (const chunk of streamMessageFromGemini(newMessages)) {
+
+      // Get current conversation history
+      const conversationHistory = getCurrentMessages()
+
+      // Stream response
+      for await (const chunk of streamMessageFromGemini(conversationHistory)) {
         // Check if aborted
         if (signal.aborted) {
           break
         }
 
         fullResponse += chunk
-        
-        // On first chunk: hide loading indicator and add AI message
+
+        // On first chunk: add AI message
         if (isFirstChunk) {
-          setIsLoading(false)
-          setMessages([...newMessages, { ...aiMessage, content: fullResponse }])
+          setLoading(false)
+          addMessage({ ...aiMessage, content: fullResponse })
           isFirstChunk = false
         } else {
-          // For subsequent chunks: just update the content
-          // flushSync needed for streaming UX (forces immediate render)
-          flushSync(() => {
-            setMessages(prevMessages => {
-              const updated = [...prevMessages]
-              updated[updated.length - 1] = {
-                ...updated[updated.length - 1],
-                content: fullResponse
-              }
-              return updated
-            })
-          })
+          // Update existing message
+          updateLastMessage(fullResponse)
         }
       }
-      
-      // Save whatever we got (even if stopped early)
-      const finalMessages = [...newMessages, { ...aiMessage, content: fullResponse }]
-      saveThread(finalMessages)
-      setIsLoading(false)
-      setIsStreaming(false)
+
+      setStreaming(false)
       abortControllerRef.current = null
+
     } catch (error) {
       console.error('Error sending message:', error)
       const errorMessage = {
@@ -168,28 +119,20 @@ export default function ChatView() {
         timestamp: Date.now(),
         isError: true
       }
-      const updatedMessages = [...newMessages, errorMessage]
-      setMessages(updatedMessages)
-      saveThread(updatedMessages)
-      setIsLoading(false)
-      setIsStreaming(false)
+      addMessage(errorMessage)
+      setLoading(false)
+      setStreaming(false)
       abortControllerRef.current = null
     }
-  }, [threadId, navigate])
+  }
 
   return (
     <div className="flex flex-col h-full pt-8">
-      <MessageList 
-        messages={messages} 
-        isLoading={isLoading}
-        threadId={threadId}
-      />
-      <ChatInput 
-        onSendMessage={handleSendMessage} 
+      <MessageList />
+      <ChatInput
+        onSendMessage={handleSendMessage}
         onStop={handleStopStreaming}
-        isStreaming={isStreaming} 
       />
     </div>
   )
 }
-

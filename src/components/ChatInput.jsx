@@ -1,10 +1,12 @@
-import { useState, memo } from 'react'
+import { useState } from 'react'
 import { Send, Square } from 'lucide-react'
 import { Button } from './ui/Button'
 import { Textarea } from './ui/Textarea'
+import { useChatStore } from '@/stores/useChatStore'
 
-function ChatInput({ onSendMessage, onStop, isStreaming }) {
+function ChatInput({ onSendMessage, onStop }) {
   const [message, setMessage] = useState('')
+  const isStreaming = useChatStore((state) => state.isStreaming)
 
   const handleSubmit = (e) => {
     e.preventDefault()
@@ -68,7 +70,5 @@ function ChatInput({ onSendMessage, onStop, isStreaming }) {
   )
 }
 
-// Memoize to prevent re-renders during streaming
-// Only re-renders when props (onSendMessage, disabled) actually change
-export default memo(ChatInput)
+export default ChatInput;
 

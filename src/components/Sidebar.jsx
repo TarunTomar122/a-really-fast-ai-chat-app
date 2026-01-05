@@ -1,34 +1,26 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Plus, Trash2, Search, PanelLeftClose, Moon, Sun } from 'lucide-react'
 import { Button } from './ui/Button'
 import { ScrollArea } from './ui/ScrollArea'
 import { Input } from './ui/Input'
 import { cn } from '@/lib/utils'
-import { useTheme } from '@/contexts/ThemeContext'
+import { useThemeStore } from '@/stores/useThemeStore'
+import { useChatStore } from '@/stores/useChatStore'
 
 export default function Sidebar({ isOpen, onToggle }) {
-  const { theme, toggleTheme } = useTheme()
+  const theme = useThemeStore((state) => state.theme)
+  const toggleTheme = useThemeStore((state) => state.toggleTheme)
+
+  // Now threads only contains metadata, no messages!
+  // This won't re-render when messages change
+  const threads = useChatStore((state) => state.threads)
+  const deleteThread = useChatStore((state) => state.deleteThread)
+  const loadThread = useChatStore((state) => state.loadThread)
+
   const navigate = useNavigate()
   const { threadId } = useParams()
-  const [threads, setThreads] = useState([])
   const [searchQuery, setSearchQuery] = useState('')
-
-  useEffect(() => {
-    loadThreads()
-    window.addEventListener('storage', loadThreads)
-    return () => window.removeEventListener('storage', loadThreads)
-  }, [])
-
-  const loadThreads = () => {
-    const savedThreads = localStorage.getItem('chat-threads')
-    if (savedThreads) {
-      const parsedThreads = JSON.parse(savedThreads)
-      // Sort by updatedAt (most recent first)
-      const sortedThreads = parsedThreads.sort((a, b) => b.updatedAt - a.updatedAt)
-      setThreads(sortedThreads)
-    }
-  }
 
   const createNewChat = () => {
     navigate('/')
@@ -38,21 +30,12 @@ export default function Sidebar({ isOpen, onToggle }) {
     }
   }
 
-  const deleteThread = (threadIdToDelete, e) => {
-    e.stopPropagation() // Prevent navigating to the thread
-    
-    const threads = JSON.parse(localStorage.getItem('chat-threads') || '[]')
-    const filteredThreads = threads.filter(t => t.id !== threadIdToDelete)
-    // Sort by updatedAt (most recent first)
-    const sortedThreads = filteredThreads.sort((a, b) => b.updatedAt - a.updatedAt)
-    localStorage.setItem('chat-threads', JSON.stringify(sortedThreads))
-    
-    // Update state directly - no need for storage event since we're already here
-    setThreads(sortedThreads)
-    
-    // If we're deleting the currently active thread, navigate to home
-    if (threadId === threadIdToDelete) {
-      navigate('/')
+  const handleThreadClick = (clickedThreadId) => {
+    loadThread(clickedThreadId) // Update store
+    navigate(`/chat/${clickedThreadId}`) // Navigate
+    // Close sidebar on mobile
+    if (window.innerWidth < 1024) {
+      onToggle()
     }
   }
 
@@ -74,6 +57,14 @@ export default function Sidebar({ isOpen, onToggle }) {
       else if (diffDays < 30) last30Days.push(thread)
       else older.push(thread)
     })
+
+    // Sort each group by updatedAt (most recent first)
+    const sortByUpdatedAt = (a, b) => b.updatedAt - a.updatedAt
+    today.sort(sortByUpdatedAt)
+    yesterday.sort(sortByUpdatedAt)
+    last7Days.sort(sortByUpdatedAt)
+    last30Days.sort(sortByUpdatedAt)
+    older.sort(sortByUpdatedAt)
 
     return [
       { label: 'Today', threads: today },
@@ -155,13 +146,7 @@ export default function Sidebar({ isOpen, onToggle }) {
                         "group relative w-full text-left px-3 py-2 rounded-md hover:bg-accent transition-colors cursor-pointer",
                         threadId === thread.id && "bg-accent"
                       )}
-                      onClick={() => {
-                        navigate(`/chat/${thread.id}`)
-                        // Close sidebar on mobile after selecting a thread
-                        if (window.innerWidth < 1024) {
-                          onToggle()
-                        }
-                      }}
+                      onClick={() => handleThreadClick(thread.id)}
                     >
                       <div className="flex items-center gap-2">
                         <div className="flex-1 min-w-0 pr-6">
@@ -170,7 +155,10 @@ export default function Sidebar({ isOpen, onToggle }) {
                           </p>
                         </div>
                         <button
-                          onClick={(e) => deleteThread(thread.id, e)}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            deleteThread(thread.id)
+                          }}
                           className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-destructive/10 rounded"
                           title="Delete chat"
                         >

@@ -56,7 +56,7 @@ const streamMessageFromGeminiRaw = async function* (messages) {
 // Takes chunks from Gemini and splits them into individual characters
 // with a small delay for typewriter effect
 export const streamMessageFromGemini = async function* (messages) {
-  const CHAR_DELAY_MS = 1 // Adjust this for faster/slower typing (10ms = ~100 chars/sec)
+  const CHAR_DELAY_MS = 0
   
   for await (const chunk of streamMessageFromGeminiRaw(messages)) {
     // Split chunk into individual characters
