@@ -119,15 +119,26 @@ That's it! Open http://localhost:5173 and start chatting.
 
 ----
 
-## future plans (maybe)
+## potential improvements
 
-- [ ] Export chat history
-- [ ] Image attachments
-- [ ] Better markdown support with syntax highlighting
-- [ ] Voice input/output
-- [ ] IndexDB for better storage
+Some things that could be better:
 
-But honestly this works great as is so idk if i'll do any of these lol.
+**1. Handle reload/navigation during AI responses**
+
+Right now if you reload the page or switch to another chat while the AI is responding, that response just gets lost. Should probably save partial responses to localStorage so they persist. Would need to track streaming state and resume properly.
+
+**2. IndexDB instead of localStorage**
+
+localStorage is fine for now but has a 5-10MB limit. With lots of chats and long conversations, you'd eventually hit that. IndexDB would be better for storing all the messages and threads. Plus it's faster for large datasets.
+
+**3. Image input/output**
+
+Gemini supports images but we're only doing text right now. Would be cool to:
+- Let users upload images with their messages
+- Show images in AI responses (Gemini can generate/analyze them)
+- Handle image compression/storage properly
+
+These would make the app more useful but honestly it works pretty well as is.
 
 ----
 
